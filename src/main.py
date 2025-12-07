@@ -280,5 +280,95 @@ class GeneradorTablasDinamicas:
                 columns='CD', aggfunc='sum', fill_value=0,
                 margins=True, margins_name='Total general'
             )
-
+# ==================== EXPORTACIÓN EXCEL ====================
+# DESARROLLADORA: Josie Mamani - Sistema de exportación a Excel
+    def exportar_reporte_completo(self) -> bool:
+        try:
+            if len(self.gestor) == 0:
+                print("\n⚠️  No hay datos para exportar")
+                return False
             
+            print("\n" + "="*60)
+            print("   📁 PREPARANDO EXPORTACIÓN...")
+            print("="*60)
+            
+            # Crear DataFrame con todas las columnas originales + nuevas
+            datos_completos = []
+            for doc in self.gestor.documentos:
+                dict_completo = doc.a_diccionario()
+                datos_completos.append(dict_completo)
+            
+            df_completo = pd.DataFrame(datos_completos)
+            
+            # Solicitar ubicación para guardar
+            root = tk.Tk()
+            root.withdraw()
+            
+            mes = self.mes_reporte.strftime("%B%Y").lower()
+            nombre_sugerido = f"ARPC_PROYECCIONES_{mes}.xlsx"
+            
+            ruta_salida = filedialog.asksaveasfilename(
+                title="Guardar Reporte de Proyecciones",
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")],
+                initialfile=nombre_sugerido
+            )
+            
+            if not ruta_salida:
+                print("\n⚠️  Exportación cancelada")
+                return False
+            
+            # Exportar a Excel con múltiples hojas
+            with pd.ExcelWriter(ruta_salida, engine='openpyxl') as writer:
+                # Hoja 1: Datos completos
+                df_completo.to_excel(writer, sheet_name='DATOS_COMPLETOS', index=False)
+                
+                # Hoja 2: Tablas dinámicas
+                if self.generador_tablas.tabla_proyecciones is not None:
+                    # Filtrar solo columnas de semanas válidas
+                    semanas_cols = [col for col in self.generador_tablas.tabla_proyecciones.columns 
+                                  if col in ["SEMANA_1", "SEMANA_2", "SEMANA_3", "SEMANA_4", "SEMANA_5", "Total general"]]
+                    tabla_filtrada = self.generador_tablas.tabla_proyecciones[semanas_cols]
+                    tabla_filtrada.to_excel(writer, sheet_name='TABLA_DINAMICA', startrow=0)
+                    
+                    # Segunda tabla
+                    if self.generador_tablas.tabla_cd is not None:
+                        start_row = len(tabla_filtrada) + 3
+                        self.generador_tablas.tabla_cd.to_excel(
+                            writer, sheet_name='TABLA_DINAMICA', startrow=start_row
+                        )
+                
+                # Hoja 3: Resumen
+                stats = self.gestor.obtener_estadisticas()
+                df_resumen = pd.DataFrame([
+                    ["Total documentos procesados", f"{stats['total']:,}"],
+                    ["Facturas (DR)", f"{stats['dr']:,}"],
+                    ["Letras (DL)", f"{stats['dl']:,}"],
+                    ["Monto total proyectado", f"$ {stats['monto_total']:,.2f}"],
+                    ["Monto DR (Facturas)", f"$ {stats['monto_dr']:,.2f}"],
+                    ["Monto DL (Letras)", f"$ {stats['monto_dl']:,.2f}"],
+                    ["Registros originales", f"{self.total_registros:,}"],
+                    ["Columnas identificadas", f"{self.total_columnas}"],
+                    ["Tiempo procesamiento", f"{self.tiempo_proceso:.1f} segundos"],
+                    ["Fecha reporte", self.mes_reporte.strftime("%d/%m/%Y")]
+                ], columns=['INDICADOR', 'VALOR'])
+                
+                df_resumen.to_excel(writer, sheet_name='RESUMEN', index=False)
+            
+            print("\n" + "="*60)
+            print("   📁 EXPORTACIÓN EXITOSA")
+            print("="*60)
+            print(f"\n   ✅ Reporte guardado en:")
+            print(f"   📊 {ruta_salida}")
+            print(f"\n   ✅ Hojas generadas:")
+            print(f"   • DATOS_COMPLETOS: {len(df_completo):,} registros")
+            print(f"   • TABLA_DINAMICA: 2 tablas dinámicas")
+            print(f"   • RESUMEN: Indicadores clave")
+            print(f"\n   ✅ Listo para distribución a gerencia")
+            print("="*60)
+            
+            return True
+            
+        except Exception as e:
+            print(f"\n❌ Error exportando: {e}")
+            return False
