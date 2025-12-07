@@ -205,3 +205,80 @@ class DocumentoSAP(DocumentoBase, IProcesable, IExportable):
         return f"{self.cd} | {self.sectorista} | ${self.monto:,.2f}"
 
 # ==================== GESTOR DE DOCUMENTOS ====================
+# DESARROLLADORA: Elisa Cunya - Gestión y estadísticas de documentos
+class GestorDocumentos:
+    def __init__(self):
+        self.documentos: List[DocumentoSAP] = []
+    
+    def agregar_documento(self, documento: DocumentoSAP):
+        if documento._es_valido_para_procesar():
+            self.documentos.append(documento)
+    
+    def obtener_estadisticas(self) -> Dict:
+        total = len(self.documentos)
+        dr = len([d for d in self.documentos if d.cd == 'DR'])
+        dl = len([d for d in self.documentos if d.cd == 'DL'])
+        
+        monto_total = sum(d.monto for d in self.documentos)
+        monto_dr = sum(d.monto for d in self.documentos if d.cd == 'DR')
+        monto_dl = sum(d.monto for d in self.documentos if d.cd == 'DL')
+        
+        return {
+            'total': total, 'dr': dr, 'dl': dl,
+            'monto_total': monto_total, 'monto_dr': monto_dr, 'monto_dl': monto_dl
+        }
+    
+    def __len__(self):
+        return len(self.documentos)
+
+# ==================== GENERADOR DE TABLAS DINÁMICAS ====================
+# DESARROLLADORA: Elisa Cunya - Sistema de tablas dinámicas
+class GeneradorTablasDinamicas:
+    def __init__(self, gestor_documentos: GestorDocumentos):
+        self.gestor = gestor_documentos
+        self.tabla_proyecciones = None
+        self.tabla_cd = None
+    
+    def generar_tablas(self):
+        self._generar_tabla_proyecciones()
+        self._generar_tabla_cd()
+    
+    def _generar_tabla_proyecciones(self):
+        datos = []
+        for doc in self.gestor.documentos:
+            if doc.estatus == "PROYECTADO" and doc.proyeccion in [
+                "SEMANA_1", "SEMANA_2", "SEMANA_3", "SEMANA_4", "SEMANA_5"
+            ]:
+                datos.append({
+                    'SECTORISTA': doc.sectorista,
+                    'PROYECCIÓN': doc.proyeccion,
+                    'MONTO': doc.monto
+                })
+        
+        if datos:
+            df = pd.DataFrame(datos)
+            self.tabla_proyecciones = pd.pivot_table(
+                df, values='MONTO', index='SECTORISTA',
+                columns='PROYECCIÓN', aggfunc='sum', fill_value=0,
+                margins=True, margins_name='Total general'
+            )
+    
+    def _generar_tabla_cd(self):
+        datos = []
+        for doc in self.gestor.documentos:
+            if doc.estatus == "PROYECTADO":
+                datos.append({
+                    'SECTORISTA': doc.sectorista,
+                    'CD': doc.cd,
+                    'MONTO': doc.monto
+                })
+        
+        if datos:
+            df = pd.DataFrame(datos)
+            self.tabla_cd = pd.pivot_table(
+                df, values='MONTO', index='SECTORISTa',
+                columns='CD', aggfunc='sum', fill_value=0,
+                margins=True, margins_name='Total general'
+            )
+
+            
